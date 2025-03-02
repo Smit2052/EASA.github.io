@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบประเมิน ESAS Online สำหรับผู้ป่วยติดบ้านติดเตียง</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- เพิ่ม Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-functions-compat.js"></script>
+    <!-- LINE LIFF SDK -->
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ระบบประเมิน ESAS Online</h1>
+            <p>สำหรับผู้ป่วยติดบ้านติดเตียง</p>
+        </header>
+
+        <!-- ส่วนนำทาง -->
+        <nav id="main-nav">
+            <ul>
+                <li><a href="#" id="nav-home" class="active">หน้าหลัก</a></li>
+                <li><a href="#" id="nav-assessment">ประเมินอาการ</a></li>
+                <li><a href="#" id="nav-history">ประวัติการประเมิน</a></li>
+                <li><a href="#" id="nav-profile">โปรไฟล์</a></li>
+            </ul>
+        </nav>
+
+        <!-- ส่วนแสดงสถานะการเข้าสู่ระบบ -->
+        <div id="auth-status">
+            <span id="user-info">ยังไม่ได้เข้าสู่ระบบ</span>
+            <button id="auth-button" class="btn">เข้าสู่ระบบ</button>
+        </div>
+
+        <!-- ส่วนเนื้อหาหลัก - จะเปลี่ยนตามส่วนที่เลือก -->
+        <main id="content">
+            <!-- หน้าหลัก -->
+            <section id="home" class="page active">
+                <h2>ยินดีต้อนรับสู่ระบบประเมิน ESAS Online</h2>
+                <p>ระบบนี้ช่วยให้ผู้ป่วยติดบ้านติดเตียงสามารถประเมินอาการต่างๆ ของตนเองได้อย่างสะดวก</p>
+                <p>ESAS (Edmonton Symptom Assessment Scale) เป็นเครื่องมือที่ใช้ในการประเมินอาการต่างๆ ของผู้ป่วย เช่น ความปวด คลื่นไส้ เหนื่อยล้า และอื่นๆ</p>
+                <div class="cta-section">
+                    <button id="start-assessment" class="btn btn-primary">เริ่มการประเมินอาการ</button>
+                </div>
+            </section>
+
+            <!-- หน้าลงทะเบียน/เข้าสู่ระบบ -->
+            <section id="auth" class="page">
+                <div class="auth-container">
+                    <div id="login-form">
+                        <h2>เข้าสู่ระบบ</h2>
+                        <form id="signin-form">
+                            <div class="form-group">
+                                <label for="signin-email">อีเมล</label>
+                                <input type="email" id="signin-email" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="signin-password">รหัสผ่าน</label>
+                                <input type="password" id="signin-password" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="line-notification">LINE แจ้งเตือน</label>
+                                <div class="line-connect-container">
+                                    <input type="text" id="line-user-id" placeholder="LINE User ID" readonly>
+                                    <button type="button" id="connect-line-btn" class="btn btn-secondary">เชื่อมต่อ LINE</button>
+                                </div>
+                                <small>เชื่อมต่อ LINE เพื่อรับการแจ้งเตือนและรายงานสรุป</small>
+                            </div>
+                            <button type="submit" class="btn btn-primary">เข้าสู่ระบบ</button>
+                        </form>
+                        <p>ยังไม่มีบัญชี? <a href="#" id="show-signup">ลงทะเบียน</a></p>
+                        
+                        <div class="auth-divider">
+                            <span>หรือ</span>
+                        </div>
+                        
+                        <button id="line-login-btn" class="btn btn-line">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/LINE_logo.svg" alt="LINE Logo" class="line-logo">
+                            เข้าสู่ระบบด้วย LINE
+                        </button>
+                    </div>
+
+                    <div id="register-form" style="display: none;">
+                        <h2>ลงทะเบียน</h2>
+                        <form id="signup-form">
+                            <div class="form-group">
+                                <label for="signup-name">ชื่อ-นามสกุล</label>
+                                <input type="text" id="signup-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-email">อีเมล</label>
+                                <input type="email" id="signup-email" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-password">รหัสผ่าน</label>
+                                <input type="password" id="signup-password" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="signup-confirm-password">ยืนยันรหัสผ่าน</label>
+                                <input type="password" id="signup-confirm-password" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="patient-id">รหัสผู้ป่วย (ถ้ามี)</label>
+                                <input type="text" id="patient-id" placeholder="รหัสผู้ป่วย/HN">
+                            </div>
+                            <div class="form-group">
+                                <label for="line-notification-signup">LINE แจ้งเตือน</label>
+                                <div class="line-connect-container">
+                                    <input type="text" id="line-user-id-signup" placeholder="LINE User ID" readonly>
+                                    <button type="button" id="connect-line-btn-signup" class="btn btn-secondary">เชื่อมต่อ LINE</button>
+                                </div>
+                                <small>เชื่อมต่อ LINE เพื่อรับการแจ้งเตือนและรายงานสรุป</small>
+                            </div>
+                            <button type="submit" class="btn btn-primary">ลงทะเบียน</button>
+                        </form>
+                        <p>มีบัญชีแล้ว? <a href="#" id="show-signin">เข้าสู่ระบบ</a></p>
+                        
+                        <div class="auth-divider">
+                            <span>หรือ</span>
+                        </div>
+                        
+                        <button id="line-signup-btn" class="btn btn-line">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/4/41/LINE_logo.svg" alt="LINE Logo" class="line-logo">
+                            ลงทะเบียนด้วย LINE
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- หน้าประเมินอาการ ESAS -->
+            <section id="assessment" class="page">
+                <h2>ประเมินอาการ ESAS</h2>
+                <p>กรุณาเลื่อนตัวชี้วัดเพื่อระบุระดับความรุนแรงของอาการต่างๆ (0 = ไม่มีอาการ, 10 = อาการรุนแรงที่สุด)</p>
+                
+                <form id="esas-form">
+                    <div class="symptom-group">
+                        <label for="pain">ความปวด</label>
+                        <div class="range-container">
+                            <span>0</span>
+                            <input type="range" id="pain" name="pain" min="0" max="10" value="0">
+                            <span>10</span>
+                        </div>
+                        <span class="value-display">0</span>
+                    </div>
+                    
+                    <div class="symptom-group">
+                        <label for="tiredness">ความเหนื่อยล้า</label>
+                        <div class="range-container">
+                            <span>0</span>
+                            <input type="range" id="tiredness" name="tiredness" min="0" max="10" value="0">
+                            <span>10</span>
+                        </div>
+                        <span class="value-display">0</span>
+                    </div>
+                    
+                    <div class="symptom-group">
+                        <label for="nausea">คลื่นไส้อาเจียน</label>
+                        <div class="range-container">
+                            <span>0</span>
+                            <input type="range" id="nausea" name="nausea" min="0" max="10" value="0">
+                            <span>10</span>
+                        </div>
+                        <span class="value-display">0</span>
+                    </div>
+                    
+                    <div class="symptom-group">
+                        <label for="depression">ความรู้สึกซึมเศร้า</label>
+                        <div class="range-container">
+                            <span>0</span>
+                            <input type="range" id="depression" name="depression" min="0" max="10" value="0">
+                            <span>10</span>
+                        </div>
+                        <span class="value-display">0</span>
+                    </div>
+                    
+                    <div class="symptom-group">
+                        <label for="anxiety">ความวิตกกังวล</label>
+                        <div class="range-container">
+                            <span>0</span>
+                            <input type="range" id="anxiety" name="anxiety" min="0" max="10" value="0">
+                            <span>10</span>
+                        </div>
+                        <span class="value-display">0</span>
+                    </div>
+                    
+                    <div class="symptom-group">
+                        <label for="drowsiness">ความง่วงซึม</label>
+                        <div class="range-container">
+                            <span>0</span>
+                            <input type="range" id="drowsiness" name="drowsiness" min="0" max="10" value="0">
+                            <span>10</span>
+                        </div>
+                        <span class="value-display">0</span>
+                    </div>
+                    
+                    <div class="symptom-group">
+                        <label for="appetite">อาการเบื่ออาหาร</label>
+                        <div class="range-container">
+                            <span>0</span>
+                            <input type="range" id="appetite" name="appetite" min="0" max="10" value="0">
+                            <span>10</span>
+                        </div>
+                        <span class="value-display">0</span>
+                    </div>
+                    
+                    <div class="symptom-group">
+                        <label for="wellbeing">ความรู้สึกไม่สบาย</label>
+                        <div class="range-container">
+                            <span>0</span>
+                            <input type="range" id="wellbeing" name="wellbeing" min="0" max="10" value="0">
+                            <span>10</span>
+                        </div>
+                        <span class="value-display">0</span>
+                    </div>
+                    
+                    <div class="symptom-group">
+                        <label for="shortness_of_breath">หายใจลำบาก</label>
+                        <div class="range-container">
+                            <span>0</span>
+                            <input type="range" id="shortness_of_breath" name="shortness_of_breath" min="0" max="10" value="0">
+                            <span>10</span>
+                        </div>
+                        <span class="value-display">0</span>
+                    </div>
+                    
+                    <div class="symptom-group">
+                        <label for="other_symptom">อาการอื่นๆ (ระบุ)</label>
+                        <input type="text" id="other_symptom_text" name="other_symptom_text" placeholder="ระบุอาการอื่นๆ">
+                        <div class="range-container">
+                            <span>0</span>
+                            <input type="range" id="other_symptom" name="other_symptom" min="0" max="10" value="0">
+                            <span>10</span>
+                        </div>
+                        <span class="value-display">0</span>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">บันทึกการประเมิน</button>
+                </form>
+            </section>
+
+            <!-- หน้าประวัติการประเมิน -->
+            <section id="history" class="page">
+                <h2>ประวัติการประเมิน</h2>
+                <div class="filters">
+                    <label for="date-range">ช่วงเวลา:</label>
+                    <select id="date-range">
+                        <option value="7">7 วันล่าสุด</option>
+                        <option value="30">30 วันล่าสุด</option>
+                        <option value="90">3 เดือนล่าสุด</option>
+                        <option value="all">ทั้งหมด</option>
+                    </select>
+                </div>
+                <div id="history-container">
+                    <div id="history-list">
+                        <!-- จะเติมข้อมูลด้วย JavaScript -->
+                        <p class="no-data">ยังไม่มีประวัติการประเมิน</p>
+                    </div>
+                    <div id="history-chart">
+                        <!-- จะแสดงกราฟด้วย JavaScript -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- หน้าโปรไฟล์ -->
+            <section id="profile" class="page">
+                <h2>โปรไฟล์ของฉัน</h2>
+                <div id="profile-info">
+                    <div class="profile-section">
+                        <h3>ข้อมูลส่วนตัว</h3>
+                        <form id="profile-form">
+                            <div class="form-group">
+                                <label for="profile-name">ชื่อ-นามสกุล</label>
+                                <input type="text" id="profile-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-email">อีเมล</label>
+                                <input type="email" id="profile-email" disabled>
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-phone">เบอร์โทรศัพท์</label>
+                                <input type="tel" id="profile-phone">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-age">อายุ</label>
+                                <input type="number" id="profile-age" min="1" max="120">
+                            </div>
+                            <div class="form-group">
+                                <label for="profile-gender">เพศ</label>
+                                <select id="profile-gender">
+                                    <option value="">-- เลือก --</option>
+                                    <option value="male">ชาย</option>
+                                    <option value="female">หญิง</option>
+                                    <option value="other">อื่นๆ</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-primary">บันทึกข้อมูล</button>
+                        </form>
+                    </div>
+                    
+                    <div class="profile-section">
+                        <h3>เปลี่ยนรหัสผ่าน</h3>
+                        <form id="password-form">
+                            <div class="form-group">
+                                <label for="current-password">รหัสผ่านปัจจุบัน</label>
+                                <input type="password" id="current-password" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="new-password">รหัสผ่านใหม่</label>
+                                <input type="password" id="new-password" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="confirm-new-password">ยืนยันรหัสผ่านใหม่</label>
+                                <input type="password" id="confirm-new-password" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">เปลี่ยนรหัสผ่าน</button>
+                        </form>
+                    </div>
+                    
+                    <div class="profile-section">
+                        <h3>ตัวเลือกอื่นๆ</h3>
+                        <button id="logout-button" class="btn btn-danger">ออกจากระบบ</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 ระบบประเมิน ESAS Online สำหรับผู้ป่วยติดบ้านติดเตียง</p>
+        </footer>
+    </div>
+
+    <!-- Modal สำหรับแสดงข้อความแจ้งเตือน -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <p id="modal-message"></p>
+            <button id="modal-button" class="btn">ตกลง</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
